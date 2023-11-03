@@ -1,0 +1,361 @@
+```{r}
+library(ggplot2)
+library(grid)
+library(latex2exp)
+```
+
+# 对于确定的参数，求解初始策略的v(x,y)，初始策略为全部取较高速度，将v(0,0)=0作为最后一个方程加入其中，用v(x,y)代替越界的v(x+1,y+1)。(改进可以考虑其他的替代方式)
+```{r}
+#setting of parameters
+M=50#number of states
+lambda<-1.5
+muh=4
+ch<-2
+mul=2
+cl<-1
+mu<-c(mul,muh)
+c<-c(cl,ch)
+h=1
+cp<-4
+ph<-0.3
+pl<-0.15
+p<-c(pl,ph)
+theta<-0.1
+#find A
+A<-matrix(rep(0,((M+1)*(M+1)+1)^2),nrow=(M+1)*(M+1)+1)
+B<-matrix(rep(0,(M+1)*(M+1)+1),ncol = 1)
+for (i in 0:M) {
+  for (j in 0:M) {#对x,y是否会越界分类讨论
+    row<-rep(0,(M+1)*(M+1)+1)#此数列将用来对A的行赋值
+    row[(M+1)*(M+1)+1]<-1/(lambda+theta*j+muh*ifelse(i>0,1,0))#gamma对应的系数
+    b<-(ch+h*i)/(lambda+theta*j+muh*ifelse(i>0,1,0))+ph*muh*ifelse(i>0,1,0)*cp/(lambda+theta*j+muh*ifelse(i>0,1,0))*ifelse(i>0,1,0) #b
+    if(i<M & j<M) {
+      row[i*(M+1)+j+1]<-1#v(x,y)对应的系数
+      row[(i+1)*(M+1)+j+1]<--lambda/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x+1,y)对应的系数
+      if(j>0){
+        row[(i+1)*(M+1)+j]<-{-theta*j/(lambda+theta*j+muh*ifelse(i>0,1,0))}#v(x+1,y-1)对应的系数
+      }
+      if(i>0){
+        row[(i-1)*(M+1)+j+2]<--ph*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x-1,y+1)对应的系数
+        row[(i-1)*(M+1)+j+1]<--(1-ph)*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x-1,y)对应的系数
+      }
+    } else if(i==M & j<M){ #此时x会越界，用v(x,y)代替v(x+1,y)，v(x,y-1)代替v(x+1,y-1)
+      row[i*(M+1)+j+1]<-1-lambda/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x,y)对应的系数，包括用v(x,y)和v(x+1,y)
+      if(j>0){
+        row[i*(M+1)+j]<-{-theta*j/(lambda+theta*j+muh*ifelse(i>0,1,0))}#v(x,y-1)对应的系数,来自v(x+1,y-1)
+      }
+      if(i>0){
+        row[(i-1)*(M+1)+j+2]<--ph*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x-1,y+1)对应的系数
+        row[(i-1)*(M+1)+j+1]<--(1-ph)*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x-1,y)对应的系数
+      }
+    } else if(i<M & j==M){ #此时y会越界，用v(x-1,y)代替v(x-1,y+1)
+      row[i*(M+1)+j+1]<-1#v(x,y)对应的系数
+      row[(i+1)*(M+1)+j+1]<--lambda/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x+1,y)的系数
+      if(j>0){
+        row[(i+1)*(M+1)+j]<-{-theta*j/(lambda+theta*j+muh*ifelse(i>0,1,0))}#v(x+1,y-1)对应的系数
+      }
+      if(i>0){
+        row[(i-1)*(M+1)+j+1]<--ph*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0))-(1-ph)*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x-1,y)的系数，来自v(x-1,y+1)和v(x-1,y)
+      }
+    } else{ #x，y都是M，都会越界
+      row[i*(M+1)+j+1]<-1-lambda/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x,y)对应的系数，包括用v(x,y)和v(x+1,y)
+      row[i*(M+1)+j]<-{-theta*j/(lambda+theta*j+muh*ifelse(i>0,1,0))}#v(x,y-1)对应的系数,来自v(x+1,y-1)
+      row[(i-1)*(M+1)+j+1]<--ph*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0))-(1-ph)*muh*ifelse(i>0,1,0)/(lambda+theta*j+muh*ifelse(i>0,1,0)) #v(x-1,y)的系数，来自v(x-1,y+1)和v(x-1,y)
+    }
+    A[i*(M+1)+j+1,]<-row
+    B[i*(M+1)+j+1]<-b
+  }
+}
+A[(M+1)*(M+1)+1,1]<-1
+B[(M+1)*(M+1)+1]<-0
+solut<-solve(A,B)
+v0<-matrix(solut[1:(M+1)^2],nrow=M+1,byrow = T)
+gamma0<-solut[(M+1)*(M+1)+1]
+
+#用策略迭代法求解最优策略，用v(x,y)代替越界的v(x+1,y+1)，用1代表low，用2代表high
+
+#setting of parameters. Low parameter is first
+P<-list(matrix(rep(2,(M+1)^2),nrow=M+1)) #策略列表，第一个为初始策略
+v<-list(v0) #相对值函数列表
+gamma<-c(gamma0) #当前gamma值   
+#比较action得到新的策略
+while (T) {
+  #用当前的P算一套vnow和gamma赋给
+  pnow<-matrix(rep(0,(M+1)^2),nrow=M+1) #索引(x,y)要用pnow(x+1,y+1)
+  for (x in 0:M) {
+    for (y in 0:M) {
+      if(x<M & y<M) {#都不会越界
+        term1<-(x*h+c[2]-gamma[length(gamma)])/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))
+        term2<-lambda/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*v[[length(v)]][x+2,y+1]
+        term3<-theta*y/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+2,y],0)
+        term4<-p[2]*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+2],0))*ifelse(x>0,1,0)
+        term5<-(1-p[2])*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        H<-term1+term2+term3+term4+term5
+        term6<-(x*h+c[1]-gamma[length(gamma)])/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))
+        term7<-lambda/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*v[[length(v)]][x+2,y+1]
+        term8<-theta*y/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+2,y],0)
+        term9<-p[1]*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+2],0))*ifelse(x>0,1,0)
+        term10<-(1-p[1])*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        L<-term6+term7+term8+term9+term10
+        
+    } else if(x==M & y<M){ #此时x会越界
+        term1<-(x*h+c[2]-gamma[length(gamma)])/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))
+        term2<-lambda/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*v[[length(v)]][x+1,y+1]
+        term3<-theta*y/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+1,y],0)
+        term4<-p[2]*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+2],0))*ifelse(x>0,1,0)
+        term5<-(1-p[2])*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        H<-term1+term2+term3+term4+term5
+        term6<-(x*h+c[1]-gamma[length(gamma)])/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))
+        term7<-lambda/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*v[[length(v)]][x+1,y+1]
+        term8<-theta*y/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+1,y],0)
+        term9<-p[1]*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+2],0))*ifelse(x>0,1,0)
+        term10<-(1-p[1])*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        L<-term6+term7+term8+term9+term10
+      
+    } else if(x<M & y==M){ #此时y会越界
+        term1<-(x*h+c[2]-gamma[length(gamma)])/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))
+        term2<-lambda/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*v[[length(v)]][x+2,y+1]
+        term3<-theta*y/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+2,y],0)
+        term4<-p[2]*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+1],0))*ifelse(x>0,1,0)
+        term5<-(1-p[2])*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        H<-term1+term2+term3+term4+term5
+        term6<-(x*h+c[1]-gamma[length(gamma)])/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))
+        term7<-lambda/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*v[[length(v)]][x+2,y+1]
+        term8<-theta*y/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+2,y],0)
+        term9<-p[1]*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+1],0))*ifelse(x>0,1,0)
+        term10<-(1-p[1])*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        L<-term6+term7+term8+term9+term10
+       
+    } else{ #x，y都是M，都会越界
+        term1<-(x*h+c[2]-gamma[length(gamma)])/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))
+        term2<-lambda/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*v[[length(v)]][x+1,y+1]
+        term3<-theta*y/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+1,y],0)
+        term4<-p[2]*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+1],0))*ifelse(x>0,1,0)
+        term5<-(1-p[2])*mu[2]*ifelse(x>0,1,0)/(lambda+theta*y+mu[2]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        H<-term1+term2+term3+term4+term5
+        term6<-(x*h+c[1]-gamma[length(gamma)])/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))
+        term7<-lambda/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*v[[length(v)]][x+1,y+1]
+        term8<-theta*y/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(y>0,v[[length(v)]][x+1,y],0)
+        term9<-p[1]*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*(cp+ifelse(x>0,v[[length(v)]][x,y+1],0))*ifelse(x>0,1,0)
+        term10<-(1-p[1])*mu[1]*ifelse(x>0,1,0)/(lambda+theta*y+mu[1]*ifelse(x>0,1,0))*ifelse(x>0,v[[length(v)]][x,y+1],0)
+        L<-term6+term7+term8+term9+term10
+    }
+      if(H>L) {
+        pnow[x+1,y+1]<-1
+      } else {
+        pnow[x+1,y+1]<-2
+      }
+    }
+  }
+  #得到了新的策略pnow，与前一个策略进行比较
+  if(all(pnow==P[[length(P)]]) ){
+    break
+  }
+  #cat("new policy!")
+  P[[length(P)+1]]<-pnow
+  #更新V和gamma
+  A<-matrix(rep(0,((M+1)*(M+1)+1)^2),nrow=(M+1)*(M+1)+1)
+  B<-matrix(rep(0,(M+1)*(M+1)+1),ncol = 1)
+  for (i in 0:M) {
+  for (j in 0:M) {#对x,y是否会越界分类讨论
+    row<-rep(0,(M+1)*(M+1)+1)#此数列将用来对A的行赋值
+    row[(M+1)*(M+1)+1]<-1/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))#gamma对应的系数
+    b<-(c[P[[length(P)]][i+1,j+1]]+h*i)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))+p[P[[length(P)]][i+1,j+1]]*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)*cp/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))*ifelse(i>0,1,0) #b
+    if(i<M & j<M) {
+      row[i*(M+1)+j+1]<-1#v(x,y)对应的系数
+      row[(i+1)*(M+1)+j+1]<--lambda/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x+1,y)对应的系数
+      if(j>0){
+        row[(i+1)*(M+1)+j]<-{-theta*j/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))}#v(x+1,y-1)对应的系数
+      }
+      if(i>0){
+        row[(i-1)*(M+1)+j+2]<--p[P[[length(P)]][i+1,j+1]]*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x-1,y+1)对应的系数
+        row[(i-1)*(M+1)+j+1]<--(1-p[P[[length(P)]][i+1,j+1]])*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x-1,y)对应的系数
+      }
+    } else if(i==M & j<M){ #此时x会越界，用v(x,y)代替v(x+1,y)，v(x,y-1)代替v(x+1,y-1)
+      row[i*(M+1)+j+1]<-1-lambda/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x,y)对应的系数，包括用v(x,y)和v(x+1,y)
+      if(j>0){
+        row[i*(M+1)+j]<-{-theta*j/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))}#v(x,y-1)对应的系数,来自v(x+1,y-1)
+      }
+      if(i>0){
+        row[(i-1)*(M+1)+j+2]<--p[P[[length(P)]][i+1,j+1]]*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x-1,y+1)对应的系数
+        row[(i-1)*(M+1)+j+1]<--(1-p[P[[length(P)]][i+1,j+1]])*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x-1,y)对应的系数
+      }
+    } else if(i<M & j==M){ #此时y会越界，用v(x-1,y)代替v(x-1,y+1)
+      row[i*(M+1)+j+1]<-1#v(x,y)对应的系数
+      row[(i+1)*(M+1)+j+1]<--lambda/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x+1,y)的系数
+      if(j>0){
+        row[(i+1)*(M+1)+j]<-{-theta*j/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))}#v(x+1,y-1)对应的系数
+      }
+      if(i>0){
+        row[(i-1)*(M+1)+j+1]<--p[P[[length(P)]][i+1,j+1]]*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))-(1-p[P[[length(P)]][i+1,j+1]])*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x-1,y)的系数，来自v(x-1,y+1)和v(x-1,y)
+      }
+    } else{ #x，y都是M，都会越界
+      row[i*(M+1)+j+1]<-1-lambda/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x,y)对应的系数，包括用v(x,y)和v(x+1,y)
+      row[i*(M+1)+j]<-{-theta*j/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))}#v(x,y-1)对应的系数,来自v(x+1,y-1)
+      row[(i-1)*(M+1)+j+1]<--ph*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0))-(1-p[P[[length(P)]][i+1,j+1]])*mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)/(lambda+theta*j+mu[P[[length(P)]][i+1,j+1]]*ifelse(i>0,1,0)) #v(x-1,y)的系数，来自v(x-1,y+1)和v(x-1,y)
+    }
+    A[i*(M+1)+j+1,]<-row
+    B[i*(M+1)+j+1]<-b
+  }
+}
+A[(M+1)*(M+1)+1,1]<-1
+B[(M+1)*(M+1)+1]<-0
+solut<-solve(A,B)
+vnow<-matrix(solut[1:(M+1)^2],nrow=M+1,byrow = T)
+gammanow<-solut[(M+1)*(M+1)+1]
+v[[length(v)+1]]<-vnow
+gamma<-c(gamma,gammanow)
+#增加一个停止条件
+if(abs(gamma[length(gamma)]-gamma[length(gamma)-1])<0.01) {
+    break
+  }
+}
+```
+
+```{r}
+Pfinal<-data.frame()
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,policy=P[[length(P)]][i+1,j+1]))
+  }
+}
+Pfinal$policy<-factor(Pfinal$policy)
+ggplot(Pfinal,aes(x=x,y=y,color=policy))+geom_point()+scale_color_manual(values=c("dodgerblue4","darkolivegreen4"))
+```
+
+
+#画图展示最终策略
+```{r}
+#改变cp的大小
+Pfinal<-data.frame()
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="cp=4",policy=P4[i+1,j+1]))
+  }
+}
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="cp=2",policy=P2[i+1,j+1]))
+  }
+}
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="cp=6",policy=P6[i+1,j+1]))
+  }
+}
+
+#改变h的大小
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="h=0.5",policy=P0.5[i+1,j+1]))
+  }
+}
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="h=1",policy=P1[i+1,j+1]))
+  }
+}
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="h=1.5",policy=P1.5[i+1,j+1]))
+  }
+}
+
+#改变ch和cl的比例的大小
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="ch:cl=1.5:1",policy=P1.5.1[i+1,j+1]))
+  }
+}
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="ch:cl=2:1",policy=P2.1[i+1,j+1]))
+  }
+}
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pfinal<-rbind(Pfinal,list(x=i,y=j,cp="ch:cl=2.5:1",policy=P2.5.1[i+1,j+1]))
+  }
+}
+Pfinal$policy<-factor(Pfinal$policy)
+ggplot(Pfinal,aes(x=x,y=y,color=policy))+geom_point()+facet_wrap(~cp,nrow=3)
+
+```
+```{r}
+#改变速率间的比例关系
+Pv<-data.frame()
+#改变lambda
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="lambda=1.5",policy=P_1.5[i+1,j+1]))
+  }
+}
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="lambda=1",policy=P_1[i+1,j+1]))
+  }
+}
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="lambda=0.5",policy=P_0.5[i+1,j+1]))
+  }
+}
+
+#改变h
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="h=0.5",policy=Ph_0.5[i+1,j+1]))
+  }
+}
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="h=1",policy=Ph_1[i+1,j+1]))
+  }
+}
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="h=1.5",policy=Ph_1.5[i+1,j+1]))
+  }
+}
+
+#改变mu_h
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="muh:mul=3:2",policy=P_3.2[i+1,j+1]))
+  }
+}
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="muh:mul=4:2",policy=P_4.2[i+1,j+1]))
+  }
+}
+
+for (i in 0:30) {
+  for (j in 0:30) {
+    Pv<-rbind(Pv,list(x=i,y=j,v="muh:mul=5:2",policy=P_5.2[i+1,j+1]))
+  }
+}
+
+Pv$policy<-factor(Pv$policy)
+ggplot(Pv,aes(x=x,y=y,color=policy))+geom_point()+facet_wrap(~v,nrow=3)
+
+```
+
+```{r}
+da1<-data.frame(x=c(0.002,0.004,0.006,0.008,0.01,0.002,0.004,0.006,0.008,0.01),y=c(0.006192181,0.008985786,0.01044087,0.01200305,0.01552057,0.01030137,0.009578453,0.01358593,0.01629438,0.02887445),label=c(rep("new",5),rep("old",5)))
+
+ggplot(da1,aes(x=x,y=y,color=label))+geom_point()+geom_line()
+
+da2<-data.frame(x=c(0.002,0.004,0.006,0.008,0.01),y3=c(0.02158475,0.01516169,0.01987563,0.02240448,0.0318247),y4=c(0.03684376,0.01638407,0.02309907,0.02849351,0.03911657))
+da3<-data.frame(x=c(0.002,0.004,0.006,0.008,0.01),y5=c(0.01884152,0.01900265,0.02348088,0.02595084,0.04149636),y6=c(0.0313543,0.02373808,0.02971076,0.03092239,0.06584842))
+
+ggplot(da3,aes(x = 异常值比例, y = 载荷空间的距离 ))+geom_point(aes(x=x,y=y5))+geom_point(aes(x=x,y=y6))+geom_line(aes(x=x,y=y5),lty=2)+geom_line(aes(x=x,y=y6))+legend("lefttop",legend = c("1",2),line)
+```
+
